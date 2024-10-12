@@ -1,0 +1,15 @@
+{
+    "type": "module",
+    "devDependencies": {
+        "commander": "^12.1.0"
+    },
+    "dependencies": {
+        "http": "^0.0.1-security",
+        "nodemon": "^3.1.7"
+    },
+    "scripts": {
+        "start": "node ./gameLogic/game.js",
+        "dev": "nodemon ./gameLogic/game.js",
+        "test": "node ./gameLogic/pieceTests.js"
+    }
+}

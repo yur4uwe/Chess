@@ -1,0 +1,18 @@
+#chessBoard {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    grid-gap: 0px;
+    margin: 0 auto;
+    max-width: 600px;
+    max-height: 600px;
+}
+
+.square {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid black;
+    aspect-ratio: 1 / 1; /* Ensures the height matches the width */
+    width: 100%; /* Ensures the square takes up the full width of the grid cell */
+}
