@@ -7,7 +7,7 @@ const parseId = (id) => {
   return { row, col };
 };
 
-var selectedPiece = null;
+var selectedPieceToMove = null;
 var selectedSquares = new Set();
 
 function* turnGenerator() {
@@ -44,8 +44,10 @@ async function makeMove(move) {
     renderBoard(game.board);
   }
   currentTurn = getNextTurn();
+  console.log('isCheck:', game.isCheck);
   checkGameState();
 }
+
 
 const renderBoard = (board) => {
   const chessBoard = document.getElementById('chessBoard');
@@ -79,30 +81,45 @@ const renderBoard = (board) => {
 
 const handleCellClick = (e) => {
   console.log(currentTurn);
-  const [ row, col ]  = e.target.id.split(',').map(Number);
+  const [row, col] = e.target.id.split(',').map(Number);
   console.log('Clicked cell:', row, col);
   const selectedCell = game.board.get(`${row},${col}`);
   console.log('Selected cell:', selectedCell);
-  if(selectedCell && selectedCell !== selectedPiece) {
-    selectedSquares.forEach((cell) => cell.style.backgroundColor = 'white');
+
+  // Clear previous selection if a new piece of the same color is selected
+  if (selectedCell && selectedPieceToMove
+    && selectedCell.color === selectedPieceToMove.color 
+    && selectedCell !== selectedPieceToMove) 
+  {
+    selectedSquares.forEach((cell) => { 
+      game.board.has(cell.id) 
+      ? cell.style.backgroundColor = 'gray' 
+      : cell.style.backgroundColor = 'white';
+    });
     selectedSquares.clear();
   }
+
+  // If the selected cell contains a piece of the current turn's color
   if (selectedCell && selectedCell.color === currentTurn) {
-    selectedPiece = selectedCell;
-    const moves = game.calculateMoves(selectedPiece.row, selectedPiece.col);
+    selectedPieceToMove = selectedCell;
+    const moves = game.calculateMoves(selectedPieceToMove.row, selectedPieceToMove.col);
     console.log('Moves:', moves);
+
+    // Highlight possible moves
     for (const move of moves) {
       const cell = document.getElementById(move);
       cell.style.backgroundColor = 'green';
       selectedSquares.add(cell);
     }
-  } else if (selectedPiece && selectedSquares.has(e.target)) {
-    const move = `${selectedPiece.row},${selectedPiece.col}-${row},${col}`;
+  } 
+  // If a move is made to a highlighted cell
+  else if (selectedPieceToMove && selectedSquares.has(e.target)) {
+    const move = `${selectedPieceToMove.row},${selectedPieceToMove.col}-${row},${col}`;
     selectedSquares.forEach((cell) => cell.style.backgroundColor = 'white');
     selectedSquares.clear();
     makeMove(move);
   }
-  console.log('Selected piece:', selectedPiece);
+  console.log('Selected piece:', selectedPieceToMove);
 }
 
 const checkGameState = async () => {

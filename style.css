@@ -16,3 +16,7 @@
     aspect-ratio: 1 / 1; /* Ensures the height matches the width */
     width: 100%; /* Ensures the square takes up the full width of the grid cell */
 }
+
+h1 {
+    text-align: center;
+}

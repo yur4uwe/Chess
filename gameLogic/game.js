@@ -1,6 +1,8 @@
 import http from 'http';
+import fs from 'fs';
+import path from 'path';
 import url from 'url';
-import { promises } from 'fs';
+import { fileURLToPath } from 'url';
 import ChessClass from './ChessClass.js';
 
 
@@ -26,10 +28,63 @@ const server = http.createServer(async (req, res) => {
   }
 
   req.on('data', (chunk) => {
-    console.log('data:', chunk.toString());
+    //console.log('data:', chunk.toString());
   });
 
-  if (method === 'GET' && url === '/gameState') {
+  if(method === 'GET' && url === '/'){
+    const filePath = './index.html';
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('500 - Internal Server Error');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(data);
+    });
+  }
+  else if (method === 'GET' && url === '/script.js') {
+    const filePath = './script.js';
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('500 - Internal Server Error');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/javascript' });
+      res.end(data);
+    });
+  }
+  else if (method === 'GET' && url === '/style.css') {
+    const filePath = './style.css';
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('500 - Internal Server Error');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/css' });
+      res.end(data);
+    });
+  }
+  else if (method === 'GET' && url.startsWith('/gameLogic')) {
+    const filePath = `.${url}`;
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('500 - Internal Server Error');
+        return;
+      }
+      const ext = path.extname(filePath).toLowerCase();
+      let contentType = 'application/octet-stream';
+      if (ext === '.js') contentType = 'application/javascript';
+      else if (ext === '.json') contentType = 'application/json';
+      else if (ext === '.css') contentType = 'text/css';
+      res.writeHead(200, { 'Content-Type': contentType });
+      res.end(data);
+    });
+  }
+  else if (method === 'GET' && url === '/gameState') {
     console.log('Sending game state');
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -39,7 +94,7 @@ const server = http.createServer(async (req, res) => {
       moveHistory: game.moveHistory,
     }));
   }
-  if (method === 'POST' && url === '/move') {
+  else if (method === 'POST' && url === '/move') {
     let body = '';
     req.on('data', chunk => {
       body += chunk.toString(); // Get the body data (should contain the move)
