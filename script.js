@@ -1,34 +1,39 @@
 import ChessClass from './gameLogic/ChessClass.js';
 import { Piece } from './gameLogic/piece.js';
 
+
 const parseId = (id) => {
   // Example parsing logic: split the id by a delimiter (e.g., '-')
   const [col, row] = [(id.charCodeAt(0) - 'a'.charCodeAt(0)), parseInt(id[1]) - 1];
   return { row, col };
 };
 
+async function getUserId() {
+  console.log('Getting user ID');
+  if (!userId) {
+    const response = await fetch('http://127.0.0.1:3000/connect');
+    const data = await response.json();
+    userId = data.userId;
+    color = data.color;
+    console.log('User ID:', userId);
+    console.log('Color:', color);
+  }
+  checkOpponent();
+};
+
 var selectedPieceToMove = null;
 var selectedSquares = new Set();
-
-function* turnGenerator() {
-  while (!game.isGameEnd) {
-    yield 'white';
-    yield 'black';
-  }
-}
-
-const turnGen = turnGenerator();
-
-const getNextTurn = () => turnGen.next().value;
-
-var currentTurn = 'white';
+var color = null;
+var userId = null;
+var opponentId = null;
+var game = null;
 
 async function makeMove(move) {
   console.log('Making move:', move);
   const [from, to] = move.split('-');
-  const res = await fetch('http://127.0.0.1:3000/move', {
+  const res = await fetch(`http://127.0.0.1:3000/move?userId=${userId}`, {
     method: 'POST',
-    body: JSON.stringify({ moveTo: to, moveFrom: from, player: currentTurn }),
+    body: JSON.stringify({ moveTo: to, moveFrom: from, player: color }),
     headers: { 'Content-Type': 'application/json' },
   });
   const data = await res.json();
@@ -43,7 +48,6 @@ async function makeMove(move) {
     game.MovePiece(fromRow, fromCol, toRow, toCol);
     renderBoard(game.board);
   }
-  currentTurn = getNextTurn();
   console.log('isCheck:', game.isCheck);
   checkGameState();
 }
@@ -80,7 +84,6 @@ const renderBoard = (board) => {
 };
 
 const handleCellClick = (e) => {
-  console.log(currentTurn);
   const [row, col] = e.target.id.split(',').map(Number);
   console.log('Clicked cell:', row, col);
   const selectedCell = game.board.get(`${row},${col}`);
@@ -100,7 +103,7 @@ const handleCellClick = (e) => {
   }
 
   // If the selected cell contains a piece of the current turn's color
-  if (selectedCell && selectedCell.color === currentTurn) {
+  if (selectedCell && selectedCell.color === color) {
     selectedPieceToMove = selectedCell;
     const moves = game.calculateMoves(selectedPieceToMove.row, selectedPieceToMove.col);
     console.log('Moves:', moves);
@@ -123,7 +126,7 @@ const handleCellClick = (e) => {
 }
 
 const checkGameState = async () => {
-  const res = await fetch('http://127.0.0.1:3000/gameState');
+  const res = await fetch(`http://127.0.0.1:3000/gameState?userId=${userId}`);
   const { board, isWhiteTurn, isCheck, moveHistory } = await res.json();
   console.log('Game state:', board, isWhiteTurn, isCheck, moveHistory);
   const data = { board: new Map(), isWhiteTurn, isCheck, moveHistory };
@@ -138,7 +141,32 @@ const checkGameState = async () => {
   return data;
 }
 
+async function checkOpponent() {
+  const response = await fetch(`http://127.0.0.1:3000/checkOpponent?userId=${userId}`);
+  const data = await response.json();
+  if (data.opponentId) {
+    opponentId = data.opponentId;
+    console.log('Opponent found:', opponentId);
+    const gameState = await checkGameState();
+    game = new ChessClass(gameState);
+    console.log('About to render board');
+    renderBoard(game.board);
+    // Enable move functionality
+  } else {
+    console.log('Waiting for an opponent...');
+    setTimeout(checkOpponent, 5000); // Check again after 5 seconds
+  }
+}
 
-const game = new ChessClass(await checkGameState());
-renderBoard(game.board);
-console.log(getNextTurn());
+(async () => {
+  await getUserId();
+  const gameState = await checkGameState();
+  if (gameState) {
+    game = new ChessClass(gameState);
+    console.log('About to render board');
+    renderBoard(game.board);
+  } else {
+    console.log('No game state found, checking for opponent...');
+    checkOpponent();
+  }
+})();

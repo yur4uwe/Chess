@@ -1,7 +1,8 @@
 {
     "type": "module",
     "devDependencies": {
-        "commander": "^12.1.0"
+        "commander": "^12.1.0",
+        "uuid": "^10.0.0"
     },
     "dependencies": {
         "http": "^0.0.1-security",
