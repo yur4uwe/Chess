@@ -22,7 +22,8 @@ const games = new Map();
  * Map of users and their opponents
  * Key: user ID
  * Value: opponent ID
- * @type {Map<string, string>}
+ * still works old way
+ * @type {Map<string, { opponentId: string, lastRequestTime: string}>}
  */
 const sessions = new Map();
 /**
@@ -68,6 +69,13 @@ function findUnpairedSession() {
     }
   }
   return null;
+}
+
+function dissectMove(move) {
+  const [from, to] = move.split('-');
+  const [fromRow, fromCol] = from.split(',').map(Number);
+  const [toRow, toCol] = to.split(',').map(Number);
+  return [ fromRow, fromCol, toRow, toCol ];
 }
 
 const server = http.createServer(async (req, res) => {
@@ -130,7 +138,6 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ 
       userId: userId, 
       color: color, 
-      board: null, 
     }));
   }
   else if (method === 'GET' && parsedUrl.pathname === '/checkOpponent') {
@@ -145,7 +152,6 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ opponentId: opponentId }));
     } else {
-      
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ opponentId: null }));
     }
@@ -198,7 +204,6 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const game = games.get(userId);
-    console.log('Sending game state', game);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       board: game.getBoard(),
@@ -206,6 +211,28 @@ const server = http.createServer(async (req, res) => {
       isCheck: game.isCheck,
       moveHistory: game.moveHistory,
     }));
+  }
+  else if (method === 'GET' && parsedUrl.pathname === '/waiting') {
+    if (!userId || !games.has(userId)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid or missing user ID' }));
+      return;
+    }
+    const lastMove = parsedUrl.searchParams.get('lastMove');
+    const opponentId = sessions.get(userId);
+    const opponentGame = games.get(opponentId);
+    const moveHistory = opponentGame.moveHistory;
+    //console.log('User last move:', game.moveHistory[game.moveHistory.length - 1], '\nOpponent last move', moveHistory[moveHistory.length - 1]);
+    if (lastMove !== moveHistory[moveHistory.length - 1]) {
+      console.log('Opponent made a move');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        move: moveHistory[moveHistory.length - 1],
+      }));
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ move: null }));
+    }
   }
   else if (method === 'POST' && parsedUrl.pathname === '/move') {
     if (!userId || !games.has(userId)) {
@@ -215,7 +242,7 @@ const server = http.createServer(async (req, res) => {
     }
     let body = '';
     req.on('data', chunk => {
-      body += chunk.toString(); // Get the body data (should contain the move)
+      body += chunk.toString();
     });
     
     req.on('end', () => {
@@ -248,3 +275,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, host, () => {
   console.log(`Server running at http://${host}:${port}/`);
 });
+
+async function checkTimeout() {
+
+}

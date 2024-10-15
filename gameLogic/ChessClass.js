@@ -149,6 +149,7 @@ class ChessClass {
             piece.changePosition(newRow, newCol);
             this.board.delete(setCoords(row, col));
             this.isWhiteTurn = !this.isWhiteTurn;
+            this.moveHistory.push(`${row},${col}-${newRow},${newCol}`);
         }
         
         this.dropAllCalculatedMoves();

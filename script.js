@@ -1,12 +1,12 @@
 import ChessClass from './gameLogic/ChessClass.js';
 import { Piece } from './gameLogic/piece.js';
 
-
-const parseId = (id) => {
-  // Example parsing logic: split the id by a delimiter (e.g., '-')
-  const [col, row] = [(id.charCodeAt(0) - 'a'.charCodeAt(0)), parseInt(id[1]) - 1];
-  return { row, col };
-};
+function dissectMove(move) {
+  const [from, to] = move.split('-');
+  const [fromRow, fromCol] = from.split(',').map(Number);
+  const [toRow, toCol] = to.split(',').map(Number);
+  return [ fromRow, fromCol, toRow, toCol ];
+}
 
 async function getUserId() {
   console.log('Getting user ID');
@@ -15,17 +15,21 @@ async function getUserId() {
     const data = await response.json();
     userId = data.userId;
     color = data.color;
+    myMove = color === 'white';
     console.log('User ID:', userId);
     console.log('Color:', color);
   }
-  checkOpponent();
 };
 
 var selectedPieceToMove = null;
 var selectedSquares = new Set();
+var myMove = false;
 var color = null;
 var userId = null;
 var opponentId = null;
+/**
+ * @type {ChessClass}
+ */
 var game = null;
 
 async function makeMove(move) {
@@ -47,17 +51,18 @@ async function makeMove(move) {
     console.log('Move:', fromRow, fromCol, toRow, toCol);
     game.MovePiece(fromRow, fromCol, toRow, toCol);
     renderBoard(game.board);
+    myMove = false;
+    console.log(game.moveHistory);
+    waitForMove();
   }
   console.log('isCheck:', game.isCheck);
   checkGameState();
 }
 
-
 const renderBoard = (board) => {
   const chessBoard = document.getElementById('chessBoard');
   chessBoard.innerHTML = ''; // Clear the board before rendering
   console.log('Rendering board');
-  console.log(board);
 
   for (let i = 0; i < 8; i++) {
     for (let j = 0; j < 8; j++) {
@@ -81,9 +86,14 @@ const renderBoard = (board) => {
     }
   }
   console.log('Board rendered');
+  waitForMove();
 };
 
 const handleCellClick = (e) => {
+  if (!myMove) {
+    console.log('Not my move');
+    return;
+  }
   const [row, col] = e.target.id.split(',').map(Number);
   console.log('Clicked cell:', row, col);
   const selectedCell = game.board.get(`${row},${col}`);
@@ -128,7 +138,6 @@ const handleCellClick = (e) => {
 const checkGameState = async () => {
   const res = await fetch(`http://127.0.0.1:3000/gameState?userId=${userId}`);
   const { board, isWhiteTurn, isCheck, moveHistory } = await res.json();
-  console.log('Game state:', board, isWhiteTurn, isCheck, moveHistory);
   const data = { board: new Map(), isWhiteTurn, isCheck, moveHistory };
   for (let i = 0; i < 8; i++) {
     for (let j = 0; j < 8; j++) {
@@ -158,13 +167,30 @@ async function checkOpponent() {
   }
 }
 
+async function waitForMove() {
+  const response = await fetch(`http://127.0.0.1:3000/waiting?userId=${userId}&lastMove=${game.moveHistory[game.moveHistory.length - 1]}`);
+  const data = await response.json();
+  //console.log('Data:', data);
+  if (data.move) {
+    console.log('Opponent move:', data.move);
+    const move = dissectMove(data.move);
+    game.MovePiece(move[0], move[1], move[2], move[3]);
+    renderBoard(game.board);
+    myMove = true;
+  } else {
+    setTimeout(waitForMove, 1000); // Check again after 1 second
+  }
+}
+
 (async () => {
   await getUserId();
-  const gameState = await checkGameState();
-  if (gameState) {
+  
+  if (opponentId) {
+    const gameState = await checkGameState();
     game = new ChessClass(gameState);
     console.log('About to render board');
     renderBoard(game.board);
+    console.log('Waiting for opponent move...');
   } else {
     console.log('No game state found, checking for opponent...');
     checkOpponent();
