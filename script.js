@@ -177,7 +177,7 @@ async function waitForMove() {
     game.MovePiece(move[0], move[1], move[2], move[3]);
     renderBoard(game.board);
     myMove = true;
-  } else {
+  } else if (!data.move && !data.error) {
     setTimeout(waitForMove, 1000); // Check again after 1 second
   }
 }

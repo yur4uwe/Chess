@@ -23,7 +23,7 @@ const games = new Map();
  * Key: user ID
  * Value: opponent ID
  * still works old way
- * @type {Map<string, { opponentId: string, lastRequestTime: string}>}
+ * @type {Map<string, { opponentId: string, lastRequestTime: Date}>}
  */
 const sessions = new Map();
 /**
@@ -32,7 +32,6 @@ const sessions = new Map();
  * @param {string} opponentId - The opponent ID
  */
 function addSession(userId, opponentId) {
-  // Remove any unpaired session
   const user1 = sessions.get(userId);
   const user2 = sessions.get(opponentId);
 
@@ -40,21 +39,18 @@ function addSession(userId, opponentId) {
   console.log('addSession OpponentId:', opponentId);
   console.log('User1:', user1, 'User2:', user2);
 
-  // if (sessions.has(userId) || (opponentId && sessions.has(opponentId))) {
-  //   throw new Error('At least one user already has an opponent');
-  // }
-
-  if(userId && opponentId && !user1 && !user2){
+  if (userId && opponentId && !user1 && !user2) {
     for (const [key, value] of sessions) {
       if (value === null && (key === userId || key === opponentId)) {
         sessions.delete(key);
       }
     }
   }
-  
-  sessions.set(userId, opponentId);
+
+  const now = new Date();
+  sessions.set(userId, { opponentId: opponentId, lastRequestTime: now });
   if (opponentId) {
-    sessions.set(opponentId, userId);
+    sessions.set(opponentId, { opponentId: userId, lastRequestTime: now });
   }
   console.log('Sessions:', sessions);
 }
@@ -64,7 +60,7 @@ function addSession(userId, opponentId) {
  */
 function findUnpairedSession() {
   for (const [key, value] of sessions) {
-    if (value === null) {
+    if (value.opponentId === null) {
       return key;
     }
   }
@@ -80,8 +76,7 @@ function dissectMove(move) {
 
 const server = http.createServer(async (req, res) => {
   const { method, url } = req;
-
-  console.log(method, url);
+  
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
@@ -97,9 +92,9 @@ const server = http.createServer(async (req, res) => {
   const parsedUrl = new URL(url, `http://${host}:${port}`);
   const userId = parsedUrl.searchParams.get('userId');
 
-  req.on('data', (chunk) => {
-    //console.log('data:', chunk.toString());
-  });
+  if(method !== 'GET' && parsedUrl.pathname !== '/waiting'){
+    console.log(method, url);
+  }
 
   if(method === 'GET' && parsedUrl.pathname === '/'){
     const filePath = './index.html';
@@ -146,14 +141,21 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ error: 'Invalid or missing user ID' }));
       return;
     }
-    const opponentId = sessions.get(userId);
+    const session = sessions.get(userId);
+    const opponentId = session.opponentId;
     if (opponentId) {
       console.log('Opponent found:', opponentId);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ opponentId: opponentId }));
+      setInterval(checkTimeout, 10000);
     } else {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ opponentId: null }));
+    }
+    const now = new Date();
+    sessions.set(userId, { ...session, lastRequestTime: now });
+    if (opponentId) {
+      sessions.set(opponentId, { ...sessions.get(opponentId), lastRequestTime: now });
     }
   }
   else if (method === 'GET' && parsedUrl.pathname === '/script.js') {
@@ -219,12 +221,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const lastMove = parsedUrl.searchParams.get('lastMove');
-    const opponentId = sessions.get(userId);
+    const session = sessions.get(userId);
+    const opponentId = session.opponentId;
     const opponentGame = games.get(opponentId);
     const moveHistory = opponentGame.moveHistory;
     //console.log('User last move:', game.moveHistory[game.moveHistory.length - 1], '\nOpponent last move', moveHistory[moveHistory.length - 1]);
     if (lastMove !== moveHistory[moveHistory.length - 1]) {
-      console.log('Opponent made a move');
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         move: moveHistory[moveHistory.length - 1],
@@ -251,11 +253,9 @@ const server = http.createServer(async (req, res) => {
       const moveToCol = parseInt(moveTo.split(',')[1]);
       const moveFromRow = parseInt(moveFrom.split(',')[0]);
       const moveFromCol = parseInt(moveFrom.split(',')[1]);
-      // Attempt to make the move using chess.js
       const game = games.get(userId);
       const result = game.MovePiece(moveFromRow, moveFromCol, moveToRow, moveToCol);
       if (result) {
-        // Move was valid
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           message: 'Move accepted',
@@ -264,11 +264,18 @@ const server = http.createServer(async (req, res) => {
           moveHistory: game.moveHistory,
         }));
       } else {
-        // Move was invalid
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Invalid move!' }));
       }
     });
+  
+    const now = new Date();
+    const session = sessions.get(userId);
+    const opponentId = session.opponentId;
+    sessions.set(userId, { ...session, lastRequestTime: now });
+    if (opponentId) {
+      sessions.set(opponentId, { ...sessions.get(opponentId), lastRequestTime: now });
+    }
   }
 });
 
@@ -277,5 +284,18 @@ server.listen(port, host, () => {
 });
 
 async function checkTimeout() {
-
+  if (!sessions.size) {
+    return;
+  }
+  
+  console.log('Checking timeout');
+  for (const [key, value] of sessions) {
+    if (value && value.lastRequestTime && Date.now() - value.lastRequestTime > 30000) {
+      console.log('Timeout:', key, value);
+      sessions.delete(key);
+      sessions.delete(value.opponentId);
+      games.delete(key);
+      games.delete(value.opponentId);
+    }
+  }
 }
